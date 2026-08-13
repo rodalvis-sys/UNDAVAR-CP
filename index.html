@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UNDAVAR — Cuaderno de Campaña</title>
+<meta name="description" content="Fichas, tienda y oráculo del Sabio Regidor para el juego de rol UNDAVAR. Funciona sin conexión.">
+<meta name="theme-color" content="#120f14">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-marca">
+      <div class="marca-sello">✦</div>
+      <div class="marca-texto">
+        <div class="marca-titulo">UNDAVAR</div>
+        <div class="marca-sub">Cuaderno de campaña</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="navlink activo" data-vista="inicio">🏛️ Inicio</a>
+      <a href="#" class="navlink" data-vista="ficha">📋 Ficha PJ</a>
+      <a href="#" class="navlink" data-vista="npc">🐾 PNJ / Bestias</a>
+      <a href="#" class="navlink" data-vista="tienda">🏪 Tienda</a>
+      <a href="#" class="navlink" data-vista="oraculo">🔮 Oráculo</a>
+      <a href="#" class="navlink" data-vista="dividida">⚔️ Vista Dividida</a>
+      <a href="#" class="navlink" data-vista="enfrentamiento">🎲 Tiradas enfrentadas</a>
+      <a href="#" class="navlink" data-vista="dados">🎲 Dados</a>
+    </nav>
+    <div class="sidebar-pie">
+      <span id="estado-conexion" class="estado-conexion">● listo sin conexión</span>
+    </div>
+  </aside>
+
+  <main id="app" class="contenido"></main>
+</div>
+
+<script src="js/rules.js"></script>
+<script src="js/db.js"></script>
+<script src="js/oraculo.js"></script>
+<script src="js/app.js"></script>
+<script>
+  function actualizarEstadoConexion() {
+    const el = document.getElementById("estado-conexion");
+    el.textContent = navigator.onLine ? "● en línea" : "● sin conexión (modo local)";
+    el.classList.toggle("en-linea", navigator.onLine);
+  }
+  window.addEventListener("online", actualizarEstadoConexion);
+  window.addEventListener("offline", actualizarEstadoConexion);
+  actualizarEstadoConexion();
+</script>
+</body>
+</html>

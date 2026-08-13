@@ -1,0 +1,16 @@
+{
+  "name": "UNDAVAR — Cuaderno de Campaña",
+  "short_name": "UNDAVAR",
+  "description": "Fichas, tienda y oráculo del Sabio Regidor para el juego de rol UNDAVAR. Funciona sin conexión.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#14111a",
+  "theme_color": "#14111a",
+  "lang": "es",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
