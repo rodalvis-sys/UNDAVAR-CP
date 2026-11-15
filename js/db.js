@@ -12,6 +12,20 @@ const STORES = ["personajes", "npcs", "tiendas", "oraculos", "config", "metas", 
 // [UNDAVAR-PARTE-6-HIBRIDO] Detecta si la app corre dentro de Tauri
 const ES_TAURI = typeof window !== "undefined" && !!window.__TAURI__;
 
+// [UNDAVAR-PARTE-10.12-DB-DIVIDIDA] Un panel es un iframe
+const ES_PANEL = typeof window !== "undefined" && window.self !== window.top;
+
+// [UNDAVAR-PARTE-10.12-DB-DIVIDIDA] Tauri no inyecta sus API en los iframes:
+// el panel usa la base que publica la ventana principal, que sí habla con SQLite
+function puenteBaseDatos() {
+  if (!ES_PANEL || ES_TAURI) return null;
+  try {
+    return window.parent?.UNDAVAR_DB || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // [UNDAVAR-PARTE-6-HIBRIDO] Invoca un comando Rust de la app de escritorio
 function invocarTauri(cmd, args = {}) {
   const t = window.__TAURI__;
@@ -111,6 +125,9 @@ async function compartirGananciasMatrimonio(obj) {
 }
 
 async function dbPut(store, obj) {
+  // [UNDAVAR-PARTE-10.12-DB-DIVIDIDA] En un panel, guarda la ventana principal
+  const puentePut = puenteBaseDatos();
+  if (puentePut) return puentePut.put(store, obj);
   // [UNDAVAR-PARTE-9.6-MATRIMONIO] Reparte las ganancias antes de guardar
   if (store === "personajes") {
     try { await compartirGananciasMatrimonio(obj); }
@@ -129,6 +146,9 @@ async function dbPut(store, obj) {
 }
 
 async function dbDelete(store, id) {
+  // [UNDAVAR-PARTE-10.12-DB-DIVIDIDA] En un panel, borra la ventana principal
+  const puenteDelete = puenteBaseDatos();
+  if (puenteDelete) return puenteDelete.remove(store, id);
   // [UNDAVAR-PARTE-6-SQLITE] En escritorio borra en SQLite
   if (ES_TAURI) return invocarTauri("db_delete", { store, id });
   const db = await abrirDB();
@@ -141,6 +161,9 @@ async function dbDelete(store, id) {
 }
 
 async function dbGetAll(store) {
+  // [UNDAVAR-PARTE-10.12-DB-DIVIDIDA] En un panel, lee de la ventana principal
+  const puenteTodos = puenteBaseDatos();
+  if (puenteTodos) return puenteTodos.getAll(store);
   // [UNDAVAR-PARTE-6-SQLITE] En escritorio lee de SQLite
   if (ES_TAURI) return invocarTauri("db_get_all", { store });
   const db = await abrirDB();
@@ -153,6 +176,9 @@ async function dbGetAll(store) {
 }
 
 async function dbGet(store, id) {
+  // [UNDAVAR-PARTE-10.12-DB-DIVIDIDA] En un panel, lee de la ventana principal
+  const puenteGet = puenteBaseDatos();
+  if (puenteGet) return puenteGet.get(store, id);
   // [UNDAVAR-PARTE-6-SQLITE] En escritorio lee de SQLite
   if (ES_TAURI) return invocarTauri("db_get", { store, id });
   const db = await abrirDB();
@@ -174,6 +200,9 @@ async function dbGetConfig(key, fallback=null) {
 
 // [UNDAVAR-PARTE-6-SQLITE] Información del motor y de la ruta de la base
 async function dbInfo() {
+  // [UNDAVAR-PARTE-10.12-DB-DIVIDIDA] En un panel, pregunta a la ventana principal
+  const puenteInfo = puenteBaseDatos();
+  if (puenteInfo) return puenteInfo.info();
   if (ES_TAURI) return invocarTauri("db_info");
   let total = 0;
   for (const store of STORES) total += (await dbGetAll(store)).length;
@@ -324,4 +353,16 @@ async function importarDesdeDialogo() {
   try { contenido = JSON.parse(texto); }
   catch (e) { throw new Error("Archivo .undavar inválido o corrupto."); }
   return importarContenido(contenido);
+}
+
+// [UNDAVAR-PARTE-10.12-DB-DIVIDIDA] La ventana principal publica la base para
+// que los paneles de la vista dividida usen la misma (SQLite en escritorio)
+if (!ES_PANEL) {
+  window.UNDAVAR_DB = {
+    get: dbGet,
+    getAll: dbGetAll,
+    put: dbPut,
+    remove: dbDelete,
+    info: dbInfo,
+  };
 }

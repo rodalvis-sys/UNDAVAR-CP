@@ -11079,7 +11079,9 @@ async function initApp() {
       console.warn("Migración a SQLite omitida:", e);
     }
   }
-  await precargarBaseDeDatos();
+  // [UNDAVAR-PARTE-10.12-DB-DIVIDIDA] Los paneles no precargan ni migran:
+  // la ventana principal ya dejó la base lista antes de crearlos
+  if (!esEmbed) await precargarBaseDeDatos();
   // [UNDAVAR-PARTE-4.2h2-PAREJA] Las copias son temporales: no sobreviven a recargar
   if (!esEmbed) await limpiarClonesHuerfanos();
   // [UNDAVAR-PARTE-3.6B] La migración de heridas solo corre en la ventana principal

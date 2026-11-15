@@ -86,12 +86,15 @@ Descarga el paquete `.deb` desde la sección
 [**Releases**](https://github.com/rodalvis-sys/UNDAVAR-CP/releases) e instálalo:
 
 ```bash
-sudo dpkg -i UNDAVAR_0.5.2_amd64.deb
+sudo dpkg -i UNDAVAR_0.5.3_amd64.deb
 ```
 
 ---
 
 ## 📌 Versión
+
+**0.5.3** — la vista dividida comparte la base de datos con la ventana
+principal (corregido en escritorio).
 
 **0.5.2** — galería de imágenes, imagen por pin con vista previa, visor con
 zoom y menú contextual del mapa.

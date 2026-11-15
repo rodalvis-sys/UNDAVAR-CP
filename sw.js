@@ -4,7 +4,7 @@
 // [UNDAVAR-PARTE-3.6] El SW vive en la raíz para controlar toda la app
 // [UNDAVAR-PARTE-8-MAPA] Se cachean también las imágenes del mapa y los iconos
 // [UNDAVAR-PARTE-8B-GEO] Caché nueva con el mapa de 8192
-const CACHE_NAME = "undavar-cache-v120";
+const CACHE_NAME = "undavar-cache-v121";
 const ARCHIVOS = [
   "./",
   "./index.html",
