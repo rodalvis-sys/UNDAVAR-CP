@@ -27,6 +27,8 @@ const state = {
   // Estado para la Vista Dividida
   panelIzq: { vista: "ficha", id: null },
   panelDer: { vista: "npc", id: null },
+  // [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] Refresco aplazado del panel
+  refrescoPendiente: false,
 
   // Tiradas enfrentadas
   enfrentamiento: { idA: "", idB: "", tipoA: "personajes", tipoB: "npcs" },
@@ -10997,11 +10999,53 @@ async function sincronizarHeridasPorEstado() {
   }
 }
 
+// [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] Un panel no debe refrescarse
+// mientras hay un campo en uso o una ventana abierta
+function panelEmbebidoOcupado() {
+  const el = document.activeElement;
+  if (el && (el.matches?.("input, textarea, select") || el.isContentEditable)) return true;
+  return !!document.querySelector(".modal-fondo");
+}
+
+function refrescarPanelEmbebido() {
+  if (panelEmbebidoOcupado()) { state.refrescoPendiente = true; return; }
+  state.refrescoPendiente = false;
+  try { Promise.resolve(render()).catch(() => { }); } catch (e) { }
+}
+
+// [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] El panel escucha los cambios de
+// la ventana principal y se repinta si afectan a lo que muestra
+function panelEscuchaCambios() {
+  window.addEventListener("message", (e) => {
+    if (e.source !== window.parent) return;
+    const d = e.data;
+    if (!d || d.tipo !== "undavar-db-cambio") return;
+    const propio =
+      (d.store === "personajes" && d.id === state.personajeId) ||
+      (d.store === "npcs" && d.id === state.npcId) ||
+      (d.store === "tiendas" && d.id === state.tiendaId) ||
+      (d.store === "oraculos" && d.id === state.oraculoId);
+    if (!propio) return;
+    refrescarPanelEmbebido();
+  });
+  // [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] Lo aplazado se pinta al volver
+  window.addEventListener("focus", () => {
+    if (state.refrescoPendiente) refrescarPanelEmbebido();
+  });
+}
+
 async function initApp() {
   // Detectar si la ventana se ejecuta dentro de un iframe (Vista Dividida)
   const esEmbed = window.self !== window.top;
   if (esEmbed) {
     document.body.classList.add("modo-embed");
+    // [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] El panel atiende los avisos
+    panelEscuchaCambios();
+  } else if (!mesaSincronizada) {
+    // [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] La ventana principal reparte
+    // los cambios a los paneles; sin mesa, no hace nada
+    document.addEventListener("undavar:db-cambio", (e) => sincronizarPanelesDivididos(e.detail || {}));
+    mesaSincronizada = true;
   }
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -13368,6 +13412,8 @@ const ETIQUETAS_SECCION_DIVIDIDA = {
 
 let ladoPaletaDividida = "izq";
 let mesaEscapeWireado = false;
+// [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] Un solo listener de avisos
+let mesaSincronizada = false;
 
 function leerPanelDividido(lado) {
   try {
@@ -13642,8 +13688,41 @@ async function actualizarPanelDividido(lado, panel) {
   wirePanelDividido(lado);
 }
 
+// [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] Repinta la cabecera de un panel
+function refrescarLomoPanel(lado, desc) {
+  const articulo = qs(`.mesa-panel[data-lado="${lado}"]`);
+  const lomo = articulo?.querySelector(".mesa-lomo");
+  if (!lomo) return;
+  lomo.outerHTML = lomoPanelHTML(desc, lado);
+  articulo.querySelector("[data-paleta]")?.addEventListener("click", () => abrirPaletaDividida(lado));
+}
+
+// [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] Avisa a los paneles del cambio
+// y actualiza el nombre, tipo y retrato de la cabecera que corresponda
+async function sincronizarPanelesDivididos(cambio = {}) {
+  const { store, id } = cambio;
+  document.querySelectorAll(".mesa-iframe").forEach((marco) => {
+    try {
+      marco.contentWindow?.postMessage({ tipo: "undavar-db-cambio", store, id }, "*");
+    } catch (e) { }
+  });
+  for (const lado of ["izq", "der"]) {
+    const panel = lado === "izq" ? state.panelIzq : state.panelDer;
+    if (!panel || panel.id !== id) continue;
+    const compatible =
+      (panel.vista === "ficha" && store === "personajes") ||
+      (panel.vista === "npc" && store === "npcs") ||
+      (panel.vista === "tienda" && store === "tiendas") ||
+      (panel.vista === "oraculo" && store === "oraculos");
+    if (!compatible) continue;
+    const desc = await describirPanelDividido(panel);
+    if (desc) refrescarLomoPanel(lado, desc);
+  }
+}
+
 function wireVistaDividida() {
   qs("#btn-volver-div")?.addEventListener("click", () => ir("inicio"));
+
 
   const fondo = qs("#mesa-paleta-fondo");
   qs("#mesa-cerrar-paleta")?.addEventListener("click", () => fondo?.classList.remove("abierta"));

@@ -26,6 +26,13 @@ function puenteBaseDatos() {
   }
 }
 
+// [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] Avisa de cada cambio en la base
+function avisarCambioBase(store, id) {
+  try {
+    document.dispatchEvent(new CustomEvent("undavar:db-cambio", { detail: { store, id } }));
+  } catch (e) { }
+}
+
 // [UNDAVAR-PARTE-6-HIBRIDO] Invoca un comando Rust de la app de escritorio
 function invocarTauri(cmd, args = {}) {
   const t = window.__TAURI__;
@@ -134,15 +141,22 @@ async function dbPut(store, obj) {
     catch (err) { console.warn("No se pudieron compartir las ganancias del matrimonio:", err); }
   }
   obj.updatedAt = Date.now();
+  // [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] Avisa al terminar de guardar
   // [UNDAVAR-PARTE-6-SQLITE] En escritorio guarda en SQLite
-  if (ES_TAURI) return invocarTauri("db_put", { store, data: obj });
+  if (ES_TAURI) {
+    const guardado = await invocarTauri("db_put", { store, data: obj });
+    avisarCambioBase(store, obj.id);
+    return guardado;
+  }
   const db = await abrirDB();
-  return new Promise((resolve, reject) => {
+  const resultado = await new Promise((resolve, reject) => {
     const tx = db.transaction(store, "readwrite");
     tx.objectStore(store).put(obj);
     tx.oncomplete = () => resolve(obj);
     tx.onerror = () => reject(tx.error);
   });
+  avisarCambioBase(store, obj.id);
+  return resultado;
 }
 
 async function dbDelete(store, id) {
@@ -150,14 +164,20 @@ async function dbDelete(store, id) {
   const puenteDelete = puenteBaseDatos();
   if (puenteDelete) return puenteDelete.remove(store, id);
   // [UNDAVAR-PARTE-6-SQLITE] En escritorio borra en SQLite
-  if (ES_TAURI) return invocarTauri("db_delete", { store, id });
+  if (ES_TAURI) {
+    const borrado = await invocarTauri("db_delete", { store, id });
+    avisarCambioBase(store, id);
+    return borrado;
+  }
   const db = await abrirDB();
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const tx = db.transaction(store, "readwrite");
     tx.objectStore(store).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+  // [UNDAVAR-PARTE-10.13-PANELES-SINCRONIZADOS] Avisa al terminar de borrar
+  avisarCambioBase(store, id);
 }
 
 async function dbGetAll(store) {
