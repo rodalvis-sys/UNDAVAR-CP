@@ -86,12 +86,15 @@ Descarga el paquete `.deb` desde la sección
 [**Releases**](https://github.com/rodalvis-sys/UNDAVAR-CP/releases) e instálalo:
 
 ```bash
-sudo dpkg -i UNDAVAR_0.5.4_amd64.deb
+sudo dpkg -i UNDAVAR_0.5.5_amd64.deb
 ```
 
 ---
 
 ## 📌 Versión
+
+**0.5.5** — el mapa estrena una regla para medir distancias por puntos y
+calcular el tiempo de viaje a pie, a caballo y en carro.
 
 **0.5.4** — los paneles de la vista dividida se refrescan solos al guardar
 y la cabecera del panel se actualiza.

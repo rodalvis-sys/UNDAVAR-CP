@@ -11868,6 +11868,14 @@ async function galeriaLiberarPin(imagenId) {
 const MAPA_CONFIG_KEY = "mapa-pines";
 const MAPA_IMAGEN_ANCHO = 8192;
 const MAPA_IMAGEN_ALTO = 4368;
+// [UNDAVAR-PARTE-10.14-REGLA] La barra de 1000 km del mapa mide 1130 px
+const MAPA_PX_POR_KM = 1.13;
+// [UNDAVAR-PARTE-10.14-REGLA] Velocidades de viaje en km por día
+const MAPA_VELOCIDADES = [
+  { nombre: "A pie", kmDia: 30 },
+  { nombre: "A caballo o montura", kmDia: 60 },
+  { nombre: "En carro o caravana", kmDia: 25 },
+];
 const MAPA_COLORES = ["#c9a227", "#8b2e2e", "#7a9a5c", "#4a6fa5", "#8a5cb0", "#c2703d"];
 // [UNDAVAR-PARTE-8B-GEO] Posición normalizada de cada Eslava sobre la imagen del mapa
 const MAPA_POSICIONES_ESLAVAS = {
@@ -11905,6 +11913,9 @@ const mapa = {
   seleccionado: null, eslavaSel: null, tab: "pines", filtro: "", colocando: false,
   punteros: new Map(), arrastre: null, pinch: null, moverPin: null,
   ignorarClic: false, observador: null, pantallaFallback: false,
+  // [UNDAVAR-PARTE-10.14-REGLA] Medición por puntos
+  midiendo: false, puntosRegla: [], cursorRegla: null, rafRegla: 0,
+  teclasRegla: false,
 };
 
 function mapaNormalizarTexto(t) {
@@ -12019,6 +12030,8 @@ function mapaAplicarVista() {
   mapa.lienzo.style.height = `${mapa.baseH}px`;
   mapa.lienzo.style.transform = `translate(${mapa.x}px, ${mapa.y}px) scale(${mapa.zoom})`;
   mapa.lienzo.style.setProperty("--mapa-zoom", String(mapa.zoom));
+  // [UNDAVAR-PARTE-10.14-REGLA] El grosor de los puntos depende del zoom
+  if (mapa.midiendo) mapaPintarRegla();
 }
 
 function mapaEncajar() {
@@ -12400,6 +12413,10 @@ function mapaSeleccionar(id, { centrar = false } = {}) {
   mapa.seleccionado = id;
   mapa.eslavaSel = null;
   mapa.tab = "pines";
+  // [UNDAVAR-PARTE-10.14-REGLA] La medida es temporal: se pierde al repintar
+  mapa.midiendo = false;
+  mapa.puntosRegla = [];
+  mapa.cursorRegla = null;
   // [UNDAVAR-PARTE-8B-GEO] Seleccionar algo cancela el modo de colocación
   if (mapa.colocando) { mapa.colocando = false; actualizarModoColocacion(); }
   mapaMarcarSeleccion();
@@ -12437,6 +12454,8 @@ function actualizarModoColocacion() {
 }
 
 function mapaAlternarColocacion() {
+  // [UNDAVAR-PARTE-10.14-REGLA] Colocar un pin sale antes de la medición
+  if (mapa.midiendo) mapaSalirMedida();
   mapa.colocando = !mapa.colocando;
   actualizarModoColocacion();
 }
@@ -12873,6 +12892,8 @@ function mapaPointerDown(e) {
 }
 
 function mapaPointerMove(e) {
+  // [UNDAVAR-PARTE-10.14-REGLA] Línea provisional hasta el cursor
+  if (mapa.midiendo) mapaMoverRegla(e);
   // [UNDAVAR-PARTE-8-PINES] Arrastre de un pin concreto
   if (mapa.moverPin && mapa.moverPin.id === e.pointerId) {
     const M = mapa.moverPin;
@@ -12964,6 +12985,8 @@ function mapaRueda(e) {
 }
 
 function mapaDobleClic(e) {
+  // [UNDAVAR-PARTE-10.14-REGLA] Midiendo, el doble clic no añade pines
+  if (mapa.midiendo) return;
   if (e.target.closest(".mapa-pin") || e.target.closest(".mapa-eslava") || e.target.closest(".mapa-controles") || e.target.closest(".mapa-salir")) return;
   // [UNDAVAR-PARTE-10.11.4-MENU-MAPA] Doble clic: añadir un pin en ese punto
   e.preventDefault();
@@ -12975,8 +12998,17 @@ function mapaDobleClic(e) {
 }
 
 function mapaClicFondo(e) {
+  if (e.target.closest(".mapa-controles") || e.target.closest(".mapa-salir")) return;
+  // [UNDAVAR-PARTE-10.14-REGLA] Midiendo, cada clic añade un punto encadenado
+  // (un arrastre no cuenta: el mapa se ha movido)
+  if (mapa.midiendo) {
+    if (mapa.ignorarClic) { mapa.ignorarClic = false; return; }
+    const puntoRegla = mapaPuntoLocal(e.clientX, e.clientY);
+    if (puntoRegla) mapaAgregarPuntoRegla(puntoRegla);
+    return;
+  }
   if (mapa.ignorarClic) { mapa.ignorarClic = false; return; }
-  if (e.target.closest(".mapa-pin") || e.target.closest(".mapa-eslava") || e.target.closest(".mapa-controles") || e.target.closest(".mapa-salir")) return;
+  if (e.target.closest(".mapa-pin") || e.target.closest(".mapa-eslava")) return;
   if (!mapa.colocando) {
     // [UNDAVAR-PARTE-8D-SELECCION] Clic en el fondo: quitar la marca de la Eslava o del pin
     if (mapa.eslavaSel || mapa.seleccionado) {
@@ -13014,6 +13046,8 @@ function mapaMenuTeclas(e) {
 function mapaAbrirMenu(e) {
   e.preventDefault();
   e.stopPropagation();
+  // [UNDAVAR-PARTE-10.14-REGLA] Midiendo, sin menú contextual
+  if (mapa.midiendo) return;
   mapaCerrarMenu();
   const punto = mapaPuntoLocal(e.clientX, e.clientY);
   if (!punto) return;
@@ -13056,6 +13090,8 @@ function mapaAbrirMenu(e) {
 }
 
 function mapaPinPointerDown(e) {
+  // [UNDAVAR-PARTE-10.14-REGLA] Midiendo, el clic en un pin cae en la regla
+  if (mapa.midiendo) return;
   // [UNDAVAR-PARTE-10.11.4-MENU-MAPA] El botón derecho abre el menú, no mueve el pin
   if (e.button !== 0) return;
   const btn = e.target.closest(".mapa-pin");
@@ -13070,6 +13106,165 @@ function mapaPinPointerDown(e) {
     x: e.clientX, y: e.clientY, movido: false,
   };
   try { mapa.escenario.setPointerCapture(e.pointerId); } catch (err) { }
+}
+
+// [UNDAVAR-PARTE-10.14-REGLA] Distancia en km entre dos puntos normalizados
+function mapaDistanciaKm(a, b) {
+  const dx = (b.x - a.x) * MAPA_IMAGEN_ANCHO;
+  const dy = (b.y - a.y) * MAPA_IMAGEN_ALTO;
+  return Math.hypot(dx, dy) / MAPA_PX_POR_KM;
+}
+
+// [UNDAVAR-PARTE-10.14-REGLA] Suma de todos los tramos marcados
+function mapaDistanciaRegla() {
+  let total = 0;
+  for (let i = 1; i < mapa.puntosRegla.length; i++) {
+    total += mapaDistanciaKm(mapa.puntosRegla[i - 1], mapa.puntosRegla[i]);
+  }
+  return total;
+}
+
+function mapaFormatearKm(km) {
+  if (!(km > 0)) return "0 km";
+  if (km < 10) return `${km.toFixed(1).replace(".", ",")} km`;
+  return `${Math.round(km).toLocaleString("es-ES")} km`;
+}
+
+// [UNDAVAR-PARTE-10.14-REGLA] Días y horas según la velocidad del medio
+function mapaFormatearTiempo(km, kmDia) {
+  if (!(km > 0)) return "—";
+  const minutos = Math.max(5, Math.round((km / kmDia) * 24 * 60 / 5) * 5);
+  const dias = Math.floor(minutos / 1440);
+  const resto = minutos % 1440;
+  const h = Math.floor(resto / 60);
+  const m = resto % 60;
+  if (dias > 0) return `${dias} d ${h} h`;
+  if (h > 0) return m ? `${h} h ${m} min` : `${h} h`;
+  return `${m} min`;
+}
+
+// [UNDAVAR-PARTE-10.14-REGLA] Recuadro con el total y los tiempos
+function mapaActualizarPanelRegla() {
+  const panel = document.getElementById("mapa-regla-panel");
+  if (!panel) return;
+  const puntos = mapa.puntosRegla;
+  if (!mapa.midiendo || !puntos.length) {
+    panel.hidden = true;
+    panel.innerHTML = "";
+    return;
+  }
+  const total = mapaDistanciaRegla();
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="mapa-regla-total">
+      <strong>${mapaFormatearKm(total)}</strong>
+      <span>${puntos.length === 1 ? "primer punto" : `${puntos.length} puntos`}</span>
+    </div>
+    ${puntos.length > 1 ? `<ul class="mapa-regla-tiempos">
+      ${MAPA_VELOCIDADES.map(v => `<li><span>${v.nombre}</span><b>${mapaFormatearTiempo(total, v.kmDia)}</b></li>`).join("")}
+    </ul>` : ""}
+    <p class="mapa-regla-pista">${puntos.length > 1 ? "Clic para seguir" : "Clic en el siguiente punto"} · Retroceso quita el último · Esc sale</p>`;
+}
+
+// [UNDAVAR-PARTE-10.14-REGLA] Dibuja la línea y los puntos dentro del mapa
+function mapaPintarRegla() {
+  const svg = document.getElementById("mapa-regla");
+  if (!svg) return;
+  const puntos = mapa.puntosRegla.slice();
+  if (mapa.midiendo && mapa.cursorRegla && puntos.length) puntos.push(mapa.cursorRegla);
+  if (!puntos.length) {
+    svg.innerHTML = "";
+    mapaActualizarPanelRegla();
+    return;
+  }
+  const par = (p) => [p.x * MAPA_IMAGEN_ANCHO, p.y * MAPA_IMAGEN_ALTO];
+  // [UNDAVAR-PARTE-10.14-REGLA] Tamaños en píxeles de pantalla, no de imagen
+  const escala = ((mapa.baseW || MAPA_IMAGEN_ANCHO) / MAPA_IMAGEN_ANCHO) * (mapa.zoom || 1) || 1;
+  const radio = (9 / escala).toFixed(2);
+  const guion = (8 / escala).toFixed(2);
+  const hueco = (6 / escala).toFixed(2);
+  const letra = (10.5 / escala).toFixed(2);
+  const linea = puntos.map(p => { const [x, y] = par(p); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
+  const marcas = mapa.puntosRegla.map(p => {
+    const [x, y] = par(p);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radio}" />`;
+  }).join("");
+  // [UNDAVAR-PARTE-10.14-REGLA] Km de cada tramo en su punto medio
+  let etiquetas = "";
+  for (let i = 1; i < mapa.puntosRegla.length; i++) {
+    const a = mapa.puntosRegla[i - 1];
+    const b = mapa.puntosRegla[i];
+    const [x, y] = par({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    const km = mapaDistanciaKm(a, b);
+    etiquetas += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${letra}" text-anchor="middle" dominant-baseline="middle">${mapaFormatearKm(km)}</text>`;
+  }
+  svg.innerHTML = `<polyline points="${linea}" style="stroke-dasharray:${guion} ${hueco}" />${marcas}${etiquetas}`;
+  mapaActualizarPanelRegla();
+}
+
+// [UNDAVAR-PARTE-10.14-REGLA] Evita el punto duplicado de un doble clic
+function mapaAgregarPuntoRegla(punto) {
+  const anterior = mapa.puntosRegla[mapa.puntosRegla.length - 1];
+  if (anterior) {
+    const dx = (punto.x - anterior.x) * mapa.baseW * mapa.zoom;
+    const dy = (punto.y - anterior.y) * mapa.baseH * mapa.zoom;
+    if (Math.hypot(dx, dy) < 8) return;
+  }
+  mapa.puntosRegla.push(punto);
+  mapa.cursorRegla = null;
+  mapaPintarRegla();
+}
+
+// [UNDAVAR-PARTE-10.14-REGLA] Línea provisional hasta el cursor
+function mapaMoverRegla(e) {
+  if (!mapa.midiendo || !mapa.puntosRegla.length || mapa.arrastre) return;
+  const punto = mapaPuntoLocal(e.clientX, e.clientY);
+  if (!punto) return;
+  mapa.cursorRegla = punto;
+  if (mapa.rafRegla) return;
+  mapa.rafRegla = requestAnimationFrame(() => {
+    mapa.rafRegla = 0;
+    mapaPintarRegla();
+  });
+}
+
+function mapaSalirMedida() {
+  mapa.midiendo = false;
+  mapa.puntosRegla = [];
+  mapa.cursorRegla = null;
+  if (mapa.rafRegla) { cancelAnimationFrame(mapa.rafRegla); mapa.rafRegla = 0; }
+  mapa.escenario?.classList.remove("midiendo");
+  document.getElementById("mapa-btn-medir")?.classList.remove("activo");
+  const ayuda = document.getElementById("mapa-ayuda");
+  if (ayuda) ayuda.textContent = "Arrastra para mover · Rueda o pellizco para acercar · Clic derecho o doble clic para añadir un pin";
+  mapaPintarRegla();
+  actualizarModoColocacion();
+}
+
+function mapaAlternarMedida() {
+  if (mapa.midiendo) { mapaSalirMedida(); return; }
+  mapa.midiendo = true;
+  mapa.puntosRegla = [];
+  mapa.cursorRegla = null;
+  mapa.colocando = false;
+  actualizarModoColocacion();
+  mapaCerrarMenu();
+  mapa.escenario?.classList.add("midiendo");
+  document.getElementById("mapa-btn-medir")?.classList.add("activo");
+  const ayuda = document.getElementById("mapa-ayuda");
+  if (ayuda) ayuda.textContent = "Clic para añadir puntos · Retroceso quita el último · Esc para salir";
+  mapaPintarRegla();
+  notificar("Mide la distancia: haz clic en el primer punto.");
+}
+
+function mapaTeclasRegla(e) {
+  if (!mapa.midiendo) return;
+  if (e.key === "Escape") { e.stopPropagation(); mapaSalirMedida(); return; }
+  if (e.key === "Backspace" || e.key === "Delete") {
+    e.preventDefault();
+    mapa.puntosRegla.pop();
+    mapaPintarRegla();
+  }
 }
 
 function mapaConectarEventos() {
@@ -13088,6 +13283,8 @@ function mapaConectarEventos() {
   document.getElementById("mapa-pines").addEventListener("pointerdown", mapaPinPointerDown);
   // [UNDAVAR-PARTE-8-PINES] Selección con teclado o clic sin arrastre
   document.getElementById("mapa-pines").addEventListener("click", (e) => {
+    // [UNDAVAR-PARTE-10.14-REGLA] Midiendo, el clic sigue hasta la regla
+    if (mapa.midiendo) return;
     if (mapa.ignorarClic) { mapa.ignorarClic = false; return; }
     const btn = e.target.closest(".mapa-pin");
     if (!btn) return;
@@ -13112,6 +13309,8 @@ function mapaConectarEventos() {
   esc.addEventListener("pointerdown", mapaOcultarAvancePin);
   // [UNDAVAR-PARTE-8B-GEO] Clic en un marcador de Eslava
   document.getElementById("mapa-eslavas").addEventListener("click", (e) => {
+    // [UNDAVAR-PARTE-10.14-REGLA] Midiendo, el clic sigue hasta la regla
+    if (mapa.midiendo) return;
     if (mapa.ignorarClic) { mapa.ignorarClic = false; return; }
     const btn = e.target.closest(".mapa-eslava");
     if (!btn) return;
@@ -13193,6 +13392,12 @@ function mapaConectarEventos() {
   document.getElementById("mapa-zoom-in").addEventListener("click", () => mapaZoomEn(mapa.zoom * 1.35));
   document.getElementById("mapa-zoom-out").addEventListener("click", () => mapaZoomEn(mapa.zoom / 1.35));
   document.getElementById("mapa-zoom-reset").addEventListener("click", () => mapaEncajar());
+  // [UNDAVAR-PARTE-10.14-REGLA] Botón de medir y teclas del modo
+  document.getElementById("mapa-btn-medir").addEventListener("click", () => mapaAlternarMedida());
+  if (!mapa.teclasRegla) {
+    document.addEventListener("keydown", mapaTeclasRegla);
+    mapa.teclasRegla = true;
+  }
   document.getElementById("mapa-btn-pantalla").addEventListener("click", alternarPantallaMapa);
   // [UNDAVAR-PARTE-8D-PANTALLA] Salir desde el botón flotante
   document.getElementById("mapa-salir-pantalla").addEventListener("click", alternarPantallaMapa);
@@ -13345,9 +13550,13 @@ async function renderMapa() {
           <img class="mapa-img mapa-img-full" id="mapa-img-full" src="assets/mapa/mapa-8192.webp" alt="Mapa de Undavar" draggable="false" decoding="async">
           <!-- [UNDAVAR-PARTE-8B-GEO] Capa de Eslavas debajo de los pines -->
           <div class="mapa-eslavas" id="mapa-eslavas"></div>
+          <!-- [UNDAVAR-PARTE-10.14-REGLA] Línea de medición sobre el lienzo -->
+          <svg class="mapa-regla" id="mapa-regla" viewBox="0 0 8192 4368" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div class="mapa-pines" id="mapa-pines"></div>
         </div>
         <div class="mapa-cargando" id="mapa-cargando">Cargando detalle…</div>
+        <!-- [UNDAVAR-PARTE-10.14-REGLA] Resultado de la medición -->
+        <div class="mapa-regla-panel" id="mapa-regla-panel" hidden></div>
         <div class="mapa-ayuda" id="mapa-ayuda">Arrastra para mover · Rueda o pellizco para acercar · Clic derecho o doble clic para añadir un pin</div>
         <!-- [UNDAVAR-PARTE-8D-PANTALLA] Salir de la pantalla completa del mapa -->
         <button type="button" class="mapa-salir" id="mapa-salir-pantalla" title="Salir de pantalla completa" aria-label="Salir de pantalla completa"><span data-icono="pantalla"></span></button>
@@ -13356,6 +13565,9 @@ async function renderMapa() {
           <button type="button" id="mapa-zoom-out" title="Alejar" aria-label="Alejar">−</button>
           <span class="mapa-controles-sep"></span>
           <button type="button" id="mapa-zoom-reset" title="Ver el mapa completo" aria-label="Ver el mapa completo"><span data-icono="centrar"></span></button>
+          <span class="mapa-controles-sep"></span>
+          <!-- [UNDAVAR-PARTE-10.14-REGLA] Activa la medición por puntos -->
+          <button type="button" id="mapa-btn-medir" title="Medir distancias" aria-label="Medir distancias"><span data-icono="regla"></span></button>
         </div>
       </div>
     </div>

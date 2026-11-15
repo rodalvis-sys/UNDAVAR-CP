@@ -51,6 +51,8 @@ window.UNDAVAR_ICONOS = {
   mapa: '<path d="M9 4 3.5 6.2v13.6L9 17.6l6 2.4 5.5-2.2V4.2L15 6.4 9 4z"/><path d="M9 4v13.6M15 6.4v13.6"/>',
   pantalla: '<path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/>',
   centrar: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',
+  // [UNDAVAR-PARTE-10.14-REGLA] Regla de medir
+  regla: '<path d="M3.2 16.3 16.3 3.2l4.5 4.5L7.7 20.8z"/><path d="M7 12.5l1.7 1.7M9.8 9.7l1.7 1.7M12.6 6.9l1.7 1.7"/>',
   // [UNDAVAR-PARTE-9.1-METAS] Bandera y marca de meta cumplida
   metas: '<path d="M6 3v18"/><path d="M6 4.5h11l-2.3 3.6L17 11.7H6"/>',
   check: '<path d="M4 12.5l5 5L20 6.5"/>',
