@@ -52,10 +52,46 @@ Un cuaderno de campaña interactivo, liviano y completamente ejecutable en el na
 
 ---
 
+## 🗺️ Mapa de Campaña y Galería
+
+* **Mapa interactivo** con zoom, arrastre y pantalla completa, con pines libres y marcadores de las Eslavas.
+* **Galería de imágenes** propia, integrada en la aplicación y guardada en el dispositivo.
+* **Una imagen por pin**: se elige de la galería o se carga al momento; se muestra al pasar el ratón por el pin y en su detalle.
+* **Visor con zoom**: botones, rueda, doble clic, arrastre y teclado.
+* **Añadir pines** con clic derecho en el mapa o con doble clic.
+
+---
+
 ## 🚀 Instalación y Ejecución
 
 No requiere entorno de Node.js, compilación ni instalación de paquetes (`npm install`).
 
-1. **Clonar o descargar el repositorio:**
-   ```bash
-   git clone [https://github.com/tu-usuario/UNDAVAR-CP.git](https://github.com/tu-usuario/UNDAVAR-CP.git)
+### En el navegador
+
+Abre la versión publicada: **https://rodalvis-sys.github.io/UNDAVAR-CP/**
+
+O sírvela en local:
+
+```bash
+git clone https://github.com/rodalvis-sys/UNDAVAR-CP.git
+cd UNDAVAR-CP
+python3 -m http.server 8765
+```
+
+Luego visita `http://localhost:8765/`.
+
+### Aplicación de escritorio (Linux)
+
+Descarga el paquete `.deb` desde la sección
+[**Releases**](https://github.com/rodalvis-sys/UNDAVAR-CP/releases) e instálalo:
+
+```bash
+sudo dpkg -i UNDAVAR_0.5.2_amd64.deb
+```
+
+---
+
+## 📌 Versión
+
+**0.5.2** — galería de imágenes, imagen por pin con vista previa, visor con
+zoom y menú contextual del mapa.

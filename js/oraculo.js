@@ -12,7 +12,7 @@ function tablaOraculoPorDefecto() {
 
 function oraculoPorDefecto(nombre="Oráculo de Incertidumbre") {
   return {
-    id: crypto.randomUUID(),
+    id: nuevoId(),
     tipo: "oraculo",
     nombre,
     dado: 6,
